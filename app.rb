@@ -1,6 +1,7 @@
 require 'sinatra'
 # require 'dotenv'
 # Dotenv.load
+set :port, 80
 
 preffered_content_types = ['application/octet-stream' , 'audio/ogg']
 DURATION_REGEX = /Duration:([0-9:.]+)/
