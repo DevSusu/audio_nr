@@ -1,19 +1,50 @@
 require 'sinatra'
-# require 'dotenv'
-# Dotenv.load
-set :port, 80
+require 'fog'
+require 'dotenv'
+Dotenv.load
+#set :port, 80
 
 preffered_content_types = ['application/octet-stream' , 'audio/ogg']
-DURATION_REGEX = /Duration:([0-9:.]+)/
-FILENAME_REGEX = /[\w]+_nr.ogg/
 
-# use Rack::Auth::Basic, "Protected Area" do |username, password|
-#   username == ENV['username'] && password == ENV['password']
-# end
+URL_REGEX = /https:\/\/parrote\.s3\.amazonaws\.com\/uploads\/(?<uuid>[\w-]+)\.ogg/
 
 get '/' do
  'hello world!'
 end
+
+get '/nr' do
+  ts = Time.now
+
+  url = params['url']
+
+  if not url.nil? and url =~ URL_REGEX
+
+    uuid = URL_REGEX.match(url)['uuid']
+
+    pid = fork do
+      # Download recording from s3
+      # `curl -o #{uuid}.ogg #{url}`
+      # NR on white noise
+      # `sox #{uuid}.ogg #{uuid}-nr.ogg noisered noise_white.noise-profile 0.2`
+      # Clean up
+      # `rm #{uuid}.ogg`
+
+      # Upload NR file
+      if upload(uuid)
+        # upload successful
+        # Send API request to inform server
+        reducted(uuid)
+      end
+    end
+
+    'https://parrote.s3.amazonaws.com/uploads#{uuid}-nr.ogg'
+
+  else
+    'URL is not in an appropriate format'
+  end
+
+end
+
 
 get '/records' do
   filename = params['file']
@@ -28,53 +59,29 @@ get '/records' do
 
 end
 
-post '/records' do
-  p params
-
-  filename = params['file'][:filename]
-  type = params['file'][:type]
-
-  if not preffered_content_types.include? type
-    status 415 # Unsupported Media Type
-    return "Unsupported Media Type. Only support #{preffered_content_types}"
-  end
-
-  File.open('records/' + filename, "w") do |f|
-    f.write(params['file'][:tempfile].read)
-  end
-
-  noise_profile(filename)
-  
-  "The file was successfully uploaded and noise reducted!"
+def reducted(uuid)
+  # Create a request on rails server
+  # find record with uuid
+  # change record's status to Reducted
 end
 
-def noise_profile(filename)
-  # Run command soxi to collect file header. For example,
-  # Input File     : 'filename.wav'
-  # Channels       : 1
-  # Sample Rate    : 44100
-  # Precision      : 16-bit
-  # Duration       : 00:00:39.50 = 1741824 samples = 2962.29 CDDA sectors
-  # File Size      : 3.48M
-  # Bit Rate       : 706k
-  # Sample Encoding: 16-bit Signed Integer PCM
-  header = `soxi records/#{filename}`
-  header = header.gsub(' ','') # removing whitespaces
+def upload(filename)
 
-  # convert = `sox records/#{filename} records/#{filename.split('.')[0]}.wa`
+  connection = Fog::Storage.new({
+    :provider               => 'AWS',
+    :aws_access_key_id      => ENV['AWS_ACCESS_KEY_ID'],
+    :aws_secret_access_key  => ENV['AWS_SECRET_ACCESS_KEY'],
+  })
 
-  duration = header.match(DURATION_REGEX).to_s.split(':')[1..-1].map{ |s| s.to_f }
-  duration_sec = duration[-1] + duration[-2]*60 + duration[-3] * 3600
-  p duration_sec
+  directory = connection.directories.get(ENV['AWS_BUCKET_NAME']);
 
-  # sox noisey_voice.wav -n trim 7 7.25 noiseprof speech.noise-profile
-  # currently trimming end of audio file for noise profiling
-  profile = `sox records/#{filename} -n trim #{0} #{duration_sec-1} noiseprof records/#{filename}.noise-profile`
-  p profile
+  file = directory.files.new({
+    :key                    => ENV['AWS_BUCKET_NAME'],
+    :body                   => File.open(uuid+'-nr.ogg'),
+    :public                 => true,
+    })
 
-  # noise reduction based on noise profile above
-  noise_red_alpha = 0.2
-  noise_red = `sox records/#{filename} #{filename.split('.')[0]}_nr.wav noisered records/#{filename}.noise-profile #{noise_red_alpha}`
-  p noise_red
+  file.save
 
 end
+
