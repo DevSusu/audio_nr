@@ -2,7 +2,7 @@ require 'sinatra'
 require 'fog'
 require 'dotenv'
 Dotenv.load
-#set :port, 80
+set :port, 80
 
 preffered_content_types = ['application/octet-stream' , 'audio/ogg']
 
@@ -15,45 +15,50 @@ end
 get '/nr' do
   ts = Time.now
 
+  if params['uuid'].nil? or params['url'].nil?
+    return 'Parameter uuid is missing'
+  end
+
   url = params['url']
+  uuid = params['uuid']
 
   if not url.nil? and url =~ URL_REGEX
 
-    uuid = URL_REGEX.match(url)['uuid']
+    file = URL_REGEX.match(url)['uuid']
 
     pid = fork do
       # Download recording from s3
-      `curl -o #{uuid}.ogg #{url}`
+      `curl -o #{file}.ogg #{url}`
       # NR on white noise
-      `sox #{uuid}.ogg #{uuid}-nr.ogg noisered noise_white.noise-profile 0.2`
+      `sox #{file}.ogg #{file}-nr.ogg noisered noise_white.noise-profile 0.2`
       # Clean up
-      `rm #{uuid}.ogg`
+      `rm #{file}.ogg`
 
       # Upload NR file
-      if upload(uuid+'-nr.ogg')
+      if upload(file+'-nr.ogg')
         # upload successful
         # Send API request to inform server
-        reducted(uuid)
+        reducted(file,uuid)
       end
 
-      `rm #{uuid}-nr.ogg`
+      `rm #{file}-nr.ogg`
     end
 
-    'https://parrote.s3.amazonaws.com/uploads/%s-nr.ogg' % uuid
+    'https://parrote.s3.amazonaws.com/uploads/%s-nr.ogg' % file
 
   else
-    'URL is not in an appropriate format'
+    'URL is not in an appropriate format or missing'
   end
 
 end
 
-def reducted(uuid)
+def reducted(file,uuid)
   # Create a request on rails server
   # find record with uuid
   # change record's status to Reducted
-  uri = URI.parse("http://localhost:3000/api/v1/records/nr")
+  uri = URI.parse(ENV['STAGING'])
   params = {
-    :url => 'https://parrote.s3.amazonaws.com/uploads/#{uuid}-nr.ogg',
+    :url => 'https://parrote.s3.amazonaws.com/uploads/#{file}-nr.ogg',
     :uuid => uuid,
   }
   res = Net::HTTP.post_form(uri, params)
