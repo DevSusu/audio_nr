@@ -56,7 +56,7 @@ def reducted(file,uuid)
   # Create a request on rails server
   # find record with uuid
   # change record's status to Reducted
-  uri = URI.parse(ENV['STAGING'])
+  uri = URI.parse(ENV['NR_API'])
   params = {
     :url => 'https://parrote.s3.amazonaws.com/uploads/#{file}-nr.ogg',
     :uuid => uuid,
