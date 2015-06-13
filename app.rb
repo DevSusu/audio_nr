@@ -6,7 +6,7 @@ set :port, 80
 
 preffered_content_types = ['application/octet-stream' , 'audio/ogg']
 
-URL_REGEX = /https:\/\/parrote\.s3\.amazonaws\.com\/uploads\/(?<uuid>[\w-]+)\.ogg/
+URL_REGEX = /https:\/\/loroclip-staging\.s3\.amazonaws\.com\/uploads\/(?<uuid>[\w-]+)\.ogg/
 
 get '/' do
  'hello world!'
@@ -44,7 +44,7 @@ get '/nr' do
       `rm #{file}-nr.ogg`
     end
 
-    'https://parrote.s3.amazonaws.com/uploads/%s-nr.ogg' % file
+    'https://loroclip-staging.s3.amazonaws.com/uploads/%s-nr.ogg' % file
 
   else
     'URL is not in an appropriate format or missing'
@@ -58,7 +58,7 @@ def reducted(file,uuid)
   # change record's status to Reducted
   uri = URI.parse(ENV['NR_API'])
   params = {
-    :url => 'https://parrote.s3.amazonaws.com/uploads/#{file}-nr.ogg',
+    :url => "https://loroclip-staging.s3.amazonaws.com/uploads/#{file}-nr.ogg",
     :uuid => uuid,
   }
   res = Net::HTTP.post_form(uri, params)
